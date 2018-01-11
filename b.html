@@ -23,16 +23,17 @@ var timetable = [
     ['09:58:00', '10:03:45'],
     ['10:30:00', '10:33:00']
 ];
-var timeOffset = 0;
+var timeOffset = 0;  // difference between real "now" and fake Clock time
 var months = 'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split(' ');
 var clockElementId = '';
-var timetable_s = [];
-var timetable_pair = 0;  // indicator of which pair we're looking at
-var accelerated = false;  // indicator of whether we're running fast or slow
+var timetable_s = [];  // a 1D array of timetable times.
+var timetablePosition = 0;  // indicator of which time step we're looking at
+var clockSpeed = 1;  // seconds per second
+
 
 
 function getClockTime(offset_secs) {
-    var now = new Date(new Date().getTime() - offset_secs);
+    var now = new Date(new Date().getTime() - offset_secs*1000);
     var hour = now.getHours();
     var minute = now.getMinutes();
     var second = now.getSeconds();
@@ -51,6 +52,13 @@ function drawClock() {
     var h = hms[0], m=hms[1], s=hms[2];
     document.getElementById(clockElementId).innerHTML = 
         padStart(h) + ":" + padStart(m) + ":" + padStart(s);
+
+    // Have we hit a "boundary" time when we need to change speed?
+    if ( (h*3600 + m * 60 + s) > timetable_s[timetablePosition]['time'] ) {
+        console.log("YOU HAVE HIT A BOUNDARY");
+        console.log(timetable_s[timetablePosition]['time'], "<=>", (h*3600 + m * 60 + s) );
+
+    }
 }
 
 /*
@@ -62,10 +70,24 @@ function calculateStartOffset() {
     now = new Date();
     // Use the fact that 'start' is already hh:mm:ss to create a new 
     // Date from a string.
-    /// TODO: I might be able to re-do this with timetable_s[0][0]
-    appTimeStart = new Date(now.getDate() + " " + months[now.getMonth()] + 
-                            " " + now.getFullYear() + " " + start);
-    timeOffset = now - appTimeStart;
+    var fakeDate = now.getDate() + " " + months[now.getMonth()] +
+                            " " + now.getFullYear() + " " + start;
+    appTimeStart = new Date(fakeDate);
+    timeOffset = (now.getTime() - appTimeStart.getTime()) / 1000;
+
+    // we've started; the next time is the first one where we speed up.
+    timetablePosition = 1;
+}
+
+/*
+    Convert a string "hh:mm:ss" into number of seconds.
+*/
+function convertHhmmssToSeconds(in_str) {
+    var parts = in_str.split(':');
+    var hours = parseInt(parts[0]) * 3600;
+    var minutes = parseInt(parts[1]) * 60;
+    var seconds = hours + minutes + parseInt(parts[2]);
+    return seconds;
 }
 
 
@@ -74,18 +96,17 @@ function calculateStartOffset() {
     since midnight.
 */
 function convertTimetable() {
-    for (row = 0; row < timetable.length; row++) {
-        timetable_s[row] = [0,0]
-        for (col = 0; col < 2; col++) {
-            var time_str = timetable[row][col];
-            var parts = time_str.split(':');
-            var hours = parseInt(parts[0]) * 3600
-            var minutes = parseInt(parts[1]) * 60
-            var seconds = parseInt(hours + minutes + parseInt(parts[2]));
-            timetable_s[row][col] = seconds
-        }    
+    var time_str, parts, hours, minutes, seconds;
+    var new_tt_index = 0;
+    for (var row = 0; row < timetable.length; row++) {
+        secs = convertHhmmssToSeconds(timetable[row][0]);
+        timetable_s[new_tt_index++] = {'speed': 'normal', 'time': secs};
+        secs = convertHhmmssToSeconds(timetable[row][1]);
+        timetable_s[new_tt_index++] = {'speed': 'fast', 'time': secs};
     }
-    console.log(timetable_s);
+
+    // add a "normal" time on the end.
+    timetable_s[new_tt_index++] = {'speed': 'normal', 'time': secs+30};
 }
 
 
