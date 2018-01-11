@@ -1,0 +1,109 @@
+<html>
+    <head>
+        <script>
+/*
+    Draw a (digital) clock with a start time specified by the first 
+    item in 'timetable'
+
+    time offset is a Global.
+
+
+    TODO:
+        at the start, build an array of "slow-down" and "speed-up" times,
+        make sure the timetable is chronological
+
+        I might want to redo the start-time calculations to use times-in
+        seconds, rather than relying on string manipulation.
+*/
+
+/*
+    Times in the timetable must be 'hh:mm:ss'
+*/
+var timetable = [
+    ['09:58:00', '10:03:45'],
+    ['10:30:00', '10:33:00']
+];
+var timeOffset = 0;
+var months = 'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split(' ');
+var clockElementId = '';
+var timetable_s = [];
+var timetable_pair = 0;  // indicator of which pair we're looking at
+var accelerated = false;  // indicator of whether we're running fast or slow
+
+
+function getClockTime(offset_secs) {
+    var now = new Date(new Date().getTime() - offset_secs);
+    var hour = now.getHours();
+    var minute = now.getMinutes();
+    var second = now.getSeconds();
+    return [hour, minute, second];
+}
+
+
+/* zero-pad a value (only intended for numbers up to 60) 6 => 06 */
+function padStart(num) {
+    return ('0'+num).slice(-2);
+}
+
+
+function drawClock() {
+    var hms = getClockTime(timeOffset);
+    var h = hms[0], m=hms[1], s=hms[2];
+    document.getElementById(clockElementId).innerHTML = 
+        padStart(h) + ":" + padStart(m) + ":" + padStart(s);
+}
+
+/*
+   Read the initial time from the Timetable and calculate our offset from 
+   real time.
+*/
+function calculateStartOffset() {
+    var start = timetable[0][0];
+    now = new Date();
+    // Use the fact that 'start' is already hh:mm:ss to create a new 
+    // Date from a string.
+    /// TODO: I might be able to re-do this with timetable_s[0][0]
+    appTimeStart = new Date(now.getDate() + " " + months[now.getMonth()] + 
+                            " " + now.getFullYear() + " " + start);
+    timeOffset = now - appTimeStart;
+}
+
+
+/*
+    Convert timetable in 'hh:mm:ss' into a timetable in seconds 
+    since midnight.
+*/
+function convertTimetable() {
+    for (row = 0; row < timetable.length; row++) {
+        timetable_s[row] = [0,0]
+        for (col = 0; col < 2; col++) {
+            var time_str = timetable[row][col];
+            var parts = time_str.split(':');
+            var hours = parseInt(parts[0]) * 3600
+            var minutes = parseInt(parts[1]) * 60
+            var seconds = parseInt(hours + minutes + parseInt(parts[2]));
+            timetable_s[row][col] = seconds
+        }    
+    }
+    console.log(timetable_s);
+}
+
+
+        </script>
+    </head>
+
+
+    <body>
+        <p id="digitalclock">
+        </p>
+
+        <script>
+            clockElementId = 'digitalclock';
+          
+            convertTimetable()
+            calculateStartOffset();
+            drawClock();
+            setInterval(drawClock, 1000);
+        </script>
+    </body>
+</html>
