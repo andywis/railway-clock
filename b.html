@@ -7,21 +7,36 @@
 
     time offset is a Global.
 
-
     TODO:
-        at the start, build an array of "slow-down" and "speed-up" times,
-        make sure the timetable is chronological
+        [Y] at the start, build an array of "slow-down" and "speed-up" times,
 
-        I might want to redo the start-time calculations to use times-in
-        seconds, rather than relying on string manipulation.
+        [Y] clockspeed of 600 only works if we tick every second.
+            we really need tick interval to be less (e.g. 15) and for
+            the clockspeed to be relative to it (e.g. 15/1000)*600
+        [Y] Change speed at boundaries.
+
+        [] make sure the timetable is chronological
+
+        [] put all the clock mechanism code in an object.
 */
 
 /*
     Times in the timetable must be 'hh:mm:ss'
 */
 var timetable = [
-    ['09:58:00', '10:03:45'],
+    ['09:58:00', '09:58:15'], // '10:03:45'
     ['10:30:00', '10:33:00']
+];
+
+
+// Start times may need to be adjusted to cater for accelerated clock time.
+// e.g. start 15s before you need to.
+// TODO: work out what to say about the end-end time.
+// e.g. add a 4-hour run-off block? or will the clock stop?
+
+timetable = [
+    ['09:00:00', '09:00:10'],
+    ['09:59:55', '10:00:30']
 ];
 var timeOffset = 0;  // difference between real "now" and fake Clock time
 var months = 'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split(' ');
@@ -29,7 +44,26 @@ var clockElementId = '';
 var timetable_s = [];  // a 1D array of timetable times.
 var timetablePosition = 0;  // indicator of which time step we're looking at
 var clockSpeed = 1;  // seconds per second
+var tickInterval = 16;  // 16 milliseconds, approx 60 times/second
+var fastClockSpeed = 1200; // 600 times normal == advance 10 mins every second 
 
+
+function ClockMechanism() {
+    // TODO: fill in the Clock mechanism with all the internals
+    // https://developer.mozilla.org/en-US/docs/Learn/JavaScript/Objects/Object-oriented_JS
+    this.timeOffset = 0;  // difference between real "now" and fake Clock time
+    this.months = 'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split(' ');
+
+    // getClockTime may not need offset_secs passed in, as we can use this.timeOffset instead.
+    this.getClockTime = function(offset_secs) {
+        var now = new Date(new Date().getTime() - offset_secs*1000);
+        var hour = now.getHours();
+        var minute = now.getMinutes();
+        var second = now.getSeconds();
+        return [hour, minute, second];
+    }
+
+}
 
 
 function getClockTime(offset_secs) {
@@ -53,12 +87,28 @@ function drawClock() {
     document.getElementById(clockElementId).innerHTML = 
         padStart(h) + ":" + padStart(m) + ":" + padStart(s);
 
+    if (clockSpeed > 1) {
+        // clock advances by 1s anyway.
+        timeOffset -= clockSpeed;
+    }
+
     // Have we hit a "boundary" time when we need to change speed?
-    if ( (h*3600 + m * 60 + s) > timetable_s[timetablePosition]['time'] ) {
+    if ( typeof timetable_s[timetablePosition+1] == 'undefined') {
+        clockSpeed = 1;
+    }
+    else if ( (h*3600 + m * 60 + s) > timetable_s[timetablePosition+1]['time'] ) {
         console.log("YOU HAVE HIT A BOUNDARY");
+        timetablePosition++;
         console.log(timetable_s[timetablePosition]['time'], "<=>", (h*3600 + m * 60 + s) );
 
+        if (timetable_s[timetablePosition]['speed'] == 'fast') {
+            clockSpeed = (tickInterval/1000)*fastClockSpeed;
+        }else{
+            clockSpeed = 1;
+        }
+        console.log("Clock speed is now", clockSpeed)
     }
+    
 }
 
 /*
@@ -75,8 +125,7 @@ function calculateStartOffset() {
     appTimeStart = new Date(fakeDate);
     timeOffset = (now.getTime() - appTimeStart.getTime()) / 1000;
 
-    // we've started; the next time is the first one where we speed up.
-    timetablePosition = 1;
+    timetablePosition = 0;
 }
 
 /*
@@ -107,6 +156,7 @@ function convertTimetable() {
 
     // add a "normal" time on the end.
     timetable_s[new_tt_index++] = {'speed': 'normal', 'time': secs+30};
+    console.log(timetable_s);
 }
 
 
@@ -120,11 +170,13 @@ function convertTimetable() {
 
         <script>
             clockElementId = 'digitalclock';
+
+            var mech = new ClockMechanism()
           
             convertTimetable()
             calculateStartOffset();
             drawClock();
-            setInterval(drawClock, 1000);
+            setInterval(drawClock, tickInterval);
         </script>
     </body>
 </html>
