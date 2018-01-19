@@ -15,9 +15,15 @@
             the clockspeed to be relative to it (e.g. 15/1000)*600
         [Y] Change speed at boundaries.
 
+        [Y] put all the clock mechanism code in an object.
+
+        [Y] move "digital clock" to a clockFace object.
+
         [] make sure the timetable is chronological
 
-        [] put all the clock mechanism code in an object.
+        [] second hand needs attention in high-speed mode (should
+           stay where it was when speed increased)
+
 */
 
 /*
@@ -33,150 +39,185 @@ var timetable = [
 // e.g. start 15s before you need to.
 // TODO: work out what to say about the end-end time.
 // e.g. add a 4-hour run-off block? or will the clock stop?
+// The time when the clock slows down may be a while after the stated time
+// because the clock needs to slow down. (about 20-30s with current settings)
 
 timetable = [
     ['09:00:00', '09:00:10'],
     ['09:59:55', '10:00:30']
 ];
-var timeOffset = 0;  // difference between real "now" and fake Clock time
-var months = 'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split(' ');
-var clockElementId = '';
-var timetable_s = [];  // a 1D array of timetable times.
-var timetablePosition = 0;  // indicator of which time step we're looking at
-var clockSpeed = 1;  // seconds per second
-var tickInterval = 16;  // 16 milliseconds, approx 60 times/second
-var fastClockSpeed = 1200; // 600 times normal == advance 10 mins every second 
 
 
+
+
+// Definition of ClockMechanism object
 function ClockMechanism() {
-    // TODO: fill in the Clock mechanism with all the internals
     // https://developer.mozilla.org/en-US/docs/Learn/JavaScript/Objects/Object-oriented_JS
     this.timeOffset = 0;  // difference between real "now" and fake Clock time
     this.months = 'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split(' ');
+    this.timetable_s = [];  // a 1D array of timetable times.
+    this.timetablePosition = 0;  // indicator of which time step we're looking at
+    this.clockSpeed = 1;  // seconds per second
+    this.hour = 0;  // The hour at any given point in time
+    this.minute = 0;  // The minute at any given point in time
+    this.second = 0;  // The second at any given point in time
+    this.fastClockSpeed = 1200; // 600 times normal == advance 10 mins every second
+    this.tickInterval = 16;  // 16 milliseconds, approx 60 times/second
 
-    // getClockTime may not need offset_secs passed in, as we can use this.timeOffset instead.
-    this.getClockTime = function(offset_secs) {
-        var now = new Date(new Date().getTime() - offset_secs*1000);
-        var hour = now.getHours();
-        var minute = now.getMinutes();
-        var second = now.getSeconds();
-        return [hour, minute, second];
+
+
+    this.setup = function(timetable_in) {
+        this.convertTimetable(timetable_in);
+        this.calculateStartOffset(timetable_in[0][0])
     }
 
-}
-
-
-function getClockTime(offset_secs) {
-    var now = new Date(new Date().getTime() - offset_secs*1000);
-    var hour = now.getHours();
-    var minute = now.getMinutes();
-    var second = now.getSeconds();
-    return [hour, minute, second];
-}
-
-
-/* zero-pad a value (only intended for numbers up to 60) 6 => 06 */
-function padStart(num) {
-    return ('0'+num).slice(-2);
-}
-
-
-function drawClock() {
-    var hms = getClockTime(timeOffset);
-    var h = hms[0], m=hms[1], s=hms[2];
-    document.getElementById(clockElementId).innerHTML = 
-        padStart(h) + ":" + padStart(m) + ":" + padStart(s);
-
-    if (clockSpeed > 1) {
-        // clock advances by 1s anyway.
-        timeOffset -= clockSpeed;
-    }
-
-    // Have we hit a "boundary" time when we need to change speed?
-    if ( typeof timetable_s[timetablePosition+1] == 'undefined') {
-        clockSpeed = 1;
-    }
-    else if ( (h*3600 + m * 60 + s) > timetable_s[timetablePosition+1]['time'] ) {
-        console.log("YOU HAVE HIT A BOUNDARY");
-        timetablePosition++;
-        console.log(timetable_s[timetablePosition]['time'], "<=>", (h*3600 + m * 60 + s) );
-
-        if (timetable_s[timetablePosition]['speed'] == 'fast') {
-            clockSpeed = (tickInterval/1000)*fastClockSpeed;
-        }else{
-            clockSpeed = 1;
+    /*
+        Convert timetable in 'hh:mm:ss' into a timetable in seconds
+        since midnight; more useful for further calculations
+    */
+    this.convertTimetable = function(timetable_in) {
+        var time_str, parts, hours, minutes, seconds;
+        var new_tt_index = 0;
+        for (var row = 0; row < timetable_in.length; row++) {
+            secs = this.convertHhmmssToSeconds(timetable_in[row][0]);
+            this.timetable_s[new_tt_index++] = {'speed': 'normal', 'time': secs};
+            secs = this.convertHhmmssToSeconds(timetable_in[row][1]);
+            this.timetable_s[new_tt_index++] = {'speed': 'fast', 'time': secs};
         }
-        console.log("Clock speed is now", clockSpeed)
+        // add a "normal" speed on the end.
+        this.timetable_s[new_tt_index++] = {'speed': 'normal', 'time': secs+30};
     }
+
+    /*
+        Calculate the time to be drawn.
+        Will be called every tick.
+
+        uses this.timeOffset; the difference in seconds between the time to
+        draw and real-world-time.
+
+        Sets internal properties (for use in tick()) and returns them too.
+    */
+    this.getTime = function() {
+        var now = new Date(new Date().getTime() - this.timeOffset * 1000);
+        this.hour = now.getHours();
+        this.minute = now.getMinutes();
+        this.second = now.getSeconds();
+
+        // pre-tick operations: before drawing the clock at each tick
+        if (this.clockSpeed > 1) {
+            this.second = 0;
+        }
+        return [this.hour, this.minute, this.second];
+    }
+
+    /*
+        Convert a string "hh:mm:ss" into number of seconds.
+    */
+    this.convertHhmmssToSeconds = function(in_str) {
+        var parts = in_str.split(':');
+        var hours = parseInt(parts[0]) * 3600;
+        var minutes = parseInt(parts[1]) * 60;
+        var seconds = hours + minutes + parseInt(parts[2]);
+        return seconds;
+
+    }
+
+    /*
+       Read the initial time from the Timetable and calculate our offset from
+       real time.
+       start is the start time as a string: "hh:mm:ss"
+    */
+    this.calculateStartOffset = function(start) {
+        now = new Date();
+        // Use the fact that 'start' is already hh:mm:ss to
+        // create a new Date from a string.
+        var fakeDate = now.getDate() + " " + this.months[now.getMonth()] + " " +
+                       now.getFullYear() + " " + start;
+        var appTimeStart = new Date(fakeDate);
+        this.timeOffset = (now.getTime() - appTimeStart.getTime()) / 1000;
+        this.timetablePosition = 0;
+    }
+
+ 
     
+    /*
+        Handle a single "tick". cater for accelerated time
+    */
+    this.tick = function() {
+        if (this.clockSpeed > 1) {
+            // clock advances by 1s anyway.
+            this.timeOffset -= this.clockSpeed;
+        }
+        // Have we hit a "boundary" time when we need to change speed?
+        if ( typeof this.timetable_s[this.timetablePosition+1] == 'undefined') {
+            this.clockSpeed = 1;
+        }
+        else if ((this.hour*3600 + this.minute * 60 + this.second) >
+                this.timetable_s[this.timetablePosition+1]['time']) {
+            // console.log("YOU HAVE HIT A BOUNDARY");
+            this.timetablePosition++;
+            // console.log(this.timetable_s[this.timetablePosition]['time'],
+            //            "<=>", (this.hour*3600 + this.minute * 60 + this.second) );
+
+            if (this.timetable_s[this.timetablePosition]['speed'] == 'fast') {
+                this.clockSpeed = (this.tickInterval / 1000) * this.fastClockSpeed;
+            }else{
+                this.clockSpeed = 1;
+            }
+            console.log("Clock speed is now", this.clockSpeed);
+        }
+
+
+
+    }
 }
 
-/*
-   Read the initial time from the Timetable and calculate our offset from 
-   real time.
-*/
-function calculateStartOffset() {
-    var start = timetable[0][0];
-    now = new Date();
-    // Use the fact that 'start' is already hh:mm:ss to create a new 
-    // Date from a string.
-    var fakeDate = now.getDate() + " " + months[now.getMonth()] +
-                            " " + now.getFullYear() + " " + start;
-    appTimeStart = new Date(fakeDate);
-    timeOffset = (now.getTime() - appTimeStart.getTime()) / 1000;
+// Definition of ClockFace object
+// Interface: constructor(elt, mech), setup() and draw()
+function DigitalClockFace(elementId, mechanism) {
+    this.elementId = elementId;
+    this.mech = mechanism;
 
-    timetablePosition = 0;
-}
-
-/*
-    Convert a string "hh:mm:ss" into number of seconds.
-*/
-function convertHhmmssToSeconds(in_str) {
-    var parts = in_str.split(':');
-    var hours = parseInt(parts[0]) * 3600;
-    var minutes = parseInt(parts[1]) * 60;
-    var seconds = hours + minutes + parseInt(parts[2]);
-    return seconds;
-}
-
-
-/*
-    Convert timetable in 'hh:mm:ss' into a timetable in seconds 
-    since midnight.
-*/
-function convertTimetable() {
-    var time_str, parts, hours, minutes, seconds;
-    var new_tt_index = 0;
-    for (var row = 0; row < timetable.length; row++) {
-        secs = convertHhmmssToSeconds(timetable[row][0]);
-        timetable_s[new_tt_index++] = {'speed': 'normal', 'time': secs};
-        secs = convertHhmmssToSeconds(timetable[row][1]);
-        timetable_s[new_tt_index++] = {'speed': 'fast', 'time': secs};
+    this.setup = function() {
     }
 
-    // add a "normal" time on the end.
-    timetable_s[new_tt_index++] = {'speed': 'normal', 'time': secs+30};
-    console.log(timetable_s);
-}
+    /*
+        Draw the clock face at this tick.
+        calls mech.getTime() to work out the time, then mech.tick()
+        to advance the time.
+        This method is expected to be called every animation frame.
+    */
+    this.draw = function() {
+        var hms = this.mech.getTime();
+        var h = hms[0], m=hms[1], s=hms[2];
 
+        document.getElementById(this.elementId).innerHTML = this._padStart(h) +
+                                                        ":" + this._padStart(m) +
+                                                        ":" + this._padStart(s);
+        this.mech.tick();
+    }
+
+    /*
+        zero-pad a value (only intended for numbers up to 60) 6 => 06
+    */
+    this._padStart = function(num) {
+        return ('0'+num).slice(-2);
+    }
+}
 
         </script>
     </head>
 
 
     <body>
-        <p id="digitalclock">
-        </p>
+        <p id="digitalclock"></p>
 
         <script>
-            clockElementId = 'digitalclock';
-
-            var mech = new ClockMechanism()
-          
-            convertTimetable()
-            calculateStartOffset();
-            drawClock();
-            setInterval(drawClock, tickInterval);
+            var mech = new ClockMechanism();
+            var face = new DigitalClockFace('digitalclock', mech);
+            mech.setup(timetable);
+            face.draw();
+            setInterval(function(){face.draw();}, mech.tickInterval);
         </script>
     </body>
 </html>
