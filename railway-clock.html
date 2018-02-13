@@ -1,0 +1,67 @@
+<html>
+    <head>
+        <script src="clock.js"></script>
+        <script>
+
+var timetable = [
+    ['09:00:00', '09:00:10'],
+    ['09:59:55', '10:03:30']
+];
+      </script>
+    </head>
+
+    <body>
+        <p id="digitalclock" style="font-size:24pt;">
+        </p>
+
+        <div class="container-1">
+            <canvas id="canvas" width="400" height="400" style="background-color:#333"></canvas>
+        </div>
+
+        <p>
+            The <tt>DigitalClockFace</tt> and <tt>AnalogueClockFace</tt>
+            in action. See the <a href="Readme.html">README</a>
+            and the source code.
+        </p>
+
+
+        <!-- ================================================================ -->
+
+        
+
+       <p id="digitalclock"></p>
+
+        <script>
+            // This demo sets up both an Analogue and a Digital Clock using the
+            // "railway clock" mechanism.
+
+            // Set up the Clock Mechanism 
+            var mech = new ClockMechanism();
+
+            // Load the timetable.
+            mech.setup(timetable);
+
+            // Set up the Digital Clock. Use the Element with id="digitalclock"
+            // attach the mechanism to the face.
+            var face = new DigitalClockFace('digitalclock', mech);
+
+            // Draw the digital clock face
+            face.draw();
+
+            // Set up redraw for the digital clock, every "tick" (approximately the frame rate)
+            setInterval(function(){face.draw();}, mech.tickInterval);
+
+            // Set up the Analogue Clock. The software interface is almost identical to
+            // that of the digital clock.
+            var aface = new AnalogueClockFace("canvas", mech);
+
+            // set up, then draw the analogue clock.
+            aface.setup();
+            aface.draw();
+
+            // Kick off a redraw approximately every video frame.
+            setInterval(function(){aface.draw();}, mech.tickInterval);
+   
+        </script>
+    </body>
+</html>
