@@ -1,19 +1,25 @@
-<html>
-    <head>
-        <title>A Clock for your Model Railway</title>
-    </head>
 
 
-    <body>
         <h1>A clock for your Model Railway</h1>
         <p>
-            An HTML Canvas clock, based on
-            <a href="https://www.w3schools.com/graphics/canvas_clock_start.asp">https://www.w3schools.com/graphics/canvas_clock_start.asp</a>
-            which accelerates in the periods where no train is running.
+            A clock for your Model Railway, which 
+            accelerates in the periods where no train is running.
+        </p>
+
+        <p>
+            You would run this clock inside a web
+            browser on a laptop or Raspberry Pi where
+            it can be seen by the public and operators.
+        </p>
+
+        <p>
+            It allows you to run to timetable, while keeping
+            things moving. In periods where your timetable
+            says there are no trains, the clock runs fast,
+            until a point where a train is about to appear.
         </p>
 
         <h2>How it works</h2>
-        <p>How it works...</p>
 
         <p>To set up the clock, you need to create a timetable, to 
         tell the clock when to go at normal time and when to run fast.</p>
@@ -45,6 +51,11 @@
         <!-- ================================================================ -->
 
         <h2>Technical Notes</h2>
+
+        <p>
+            The original Analogue Clock is based on 
+            <a href="https://www.w3schools.com/graphics/canvas_clock_start.asp">https://www.w3schools.com/graphics/canvas_clock_start.asp</a>
+        </p>
 
         <p>
             There are zillions of other Javascript clocks out there. Here are some I like the look of:
@@ -97,5 +108,4 @@
         </ul>
 
         
-    </body>
-</html>
+
